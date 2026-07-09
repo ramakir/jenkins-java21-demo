@@ -3,18 +3,21 @@ pipeline {
     agent any
 
     tools {
-        jdk 'Java21'
-        maven 'Maven'
+        jdk 'JDK21'
+        maven 'Maven3'
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    environment {
+        SCANNER_HOME = tool 'SonarScanner'
     }
 
     stages {
-
-        stage('Checkout') {
-            steps {
-                git branch: 'main',
-                url: 'https://github.com/ramakir/jenkins-java21-demo.git'
-            }
-        }
 
         stage('Build') {
             steps {
@@ -22,7 +25,7 @@ pipeline {
             }
         }
 
-        stage('Test') {
+        stage('Unit Test') {
             steps {
                 sh 'mvn test'
             }
@@ -40,28 +43,43 @@ pipeline {
 
                 withSonarQubeEnv('SonarQube') {
 
-                    sh '''
-                    mvn sonar:sonar \
-                    -Dsonar.projectKey=jenkins-java21-demo \
-                    -Dsonar.projectName=jenkins-java21-demo
-                    '''
-
+                    sh """
+                    ${SCANNER_HOME}/bin/sonar-scanner \
+                    -Dsonar.projectKey=java-demo \
+                    -Dsonar.sources=src \
+                    -Dsonar.java.binaries=target/classes
+                    """
                 }
-
             }
-
         }
 
         stage('Quality Gate') {
 
             steps {
 
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 10, unit: 'MINUTES') {
+
                     waitForQualityGate abortPipeline: true
+
                 }
-
             }
+        }
 
+    }
+
+    post {
+
+        success {
+            echo "Pipeline Successful"
+        }
+
+        failure {
+            echo "Pipeline Failed"
+        }
+
+        always {
+            archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            junit '**/target/surefire-reports/*.xml'
         }
 
     }
