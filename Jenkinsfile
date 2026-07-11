@@ -14,19 +14,27 @@ pipeline {
     }
 
     environment {
+
         SCANNER_HOME = tool 'SonarScanner'
 
         IMAGE_NAME = "ramakir/java-demo"
         IMAGE_TAG  = "${BUILD_NUMBER}"
+
+        MINIKUBE_SERVER = "ubuntu@172.31.45.144"
     }
 
     stages {
 
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/ramakir/jenkins-java21-demo.git'
+            }
+        }
+
         stage('Build & Test') {
             steps {
-                sh '''
-                    mvn clean verify
-                '''
+                sh 'mvn clean verify'
             }
         }
 
@@ -52,7 +60,6 @@ pipeline {
         stage('Quality Gate') {
 
             steps {
-
                 timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: false
                 }
@@ -64,8 +71,8 @@ pipeline {
             steps {
 
                 sh """
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
                 """
             }
         }
@@ -96,9 +103,44 @@ pipeline {
             steps {
 
                 sh """
-                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                    docker push ${IMAGE_NAME}:latest
+                docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                docker push ${IMAGE_NAME}:latest
                 """
+            }
+        }
+
+        stage('Deploy To Kubernetes') {
+
+            steps {
+
+                sshagent(['minikube-ssh']) {
+
+                    sh """
+
+                    echo "Copying Kubernetes manifests..."
+
+                    scp -o StrictHostKeyChecking=no \
+                    k8s/deployment.yaml \
+                    k8s/service.yaml \
+                    ${MINIKUBE_SERVER}:/home/ubuntu/
+
+                    echo "Updating image tag..."
+
+                    ssh -o StrictHostKeyChecking=no ${MINIKUBE_SERVER} "
+
+                    sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' /home/ubuntu/deployment.yaml
+
+                    kubectl apply -f /home/ubuntu/deployment.yaml
+
+                    kubectl apply -f /home/ubuntu/service.yaml
+
+                    kubectl rollout status deployment/java-demo
+
+                    kubectl get pods
+                    kubectl get svc
+                    "
+                    """
+                }
             }
         }
     }
