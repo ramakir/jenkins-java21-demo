@@ -117,29 +117,34 @@ pipeline {
 
                     sh """
 
-                    echo "Copying Kubernetes manifests..."
+            echo "Copying Kubernetes manifests..."
 
-                    scp -o StrictHostKeyChecking=no \
-                    k8s/deployment.yaml \
-                    k8s/service.yaml \
-                    ${MINIKUBE_SERVER}:/home/ubuntu/
+            scp -o StrictHostKeyChecking=no \
+            k8s/deployment.yaml \
+            k8s/service.yaml \
+            ${MINIKUBE_SERVER}:/home/ubuntu/
 
-                    echo "Updating image tag..."
+            echo "Deploying to Kubernetes..."
 
-                    ssh -o StrictHostKeyChecking=no ${MINIKUBE_SERVER} "
+            ssh -o StrictHostKeyChecking=no ${MINIKUBE_SERVER} "
 
-                    sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' /home/ubuntu/deployment.yaml
+            kubectl apply -f /home/ubuntu/deployment.yaml
 
-                    kubectl apply -f /home/ubuntu/deployment.yaml
+            kubectl apply -f /home/ubuntu/service.yaml
 
-                    kubectl apply -f /home/ubuntu/service.yaml
+            kubectl set image deployment/java-demo \
+            java-demo=${IMAGE_NAME}:${IMAGE_TAG}
 
-                    kubectl rollout status deployment/java-demo
+            kubectl rollout status deployment/java-demo
 
-                    kubectl get pods
-                    kubectl get svc
-                    "
-                    """
+            echo 'Pods:'
+            kubectl get pods -o wide
+
+            echo 'Services:'
+            kubectl get svc
+
+            "
+            """
                 }
             }
         }
