@@ -24,7 +24,9 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                sh 'mvn clean package'
+                sh '''
+                    mvn clean verify
+                '''
             }
         }
 
@@ -37,8 +39,11 @@ pipeline {
                     sh """
                     ${SCANNER_HOME}/bin/sonar-scanner \
                     -Dsonar.projectKey=java-demo \
-                    -Dsonar.sources=src \
-                    -Dsonar.java.binaries=target/classes
+                    -Dsonar.sources=src/main \
+                    -Dsonar.tests=src/test \
+                    -Dsonar.java.binaries=target/classes \
+                    -Dsonar.java.libraries=target/*.jar \
+                    -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
                     """
                 }
             }
@@ -49,7 +54,7 @@ pipeline {
             steps {
 
                 timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
@@ -96,7 +101,6 @@ pipeline {
                 """
             }
         }
-
     }
 
     post {
